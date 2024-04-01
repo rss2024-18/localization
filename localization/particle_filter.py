@@ -1,13 +1,12 @@
 from localization.sensor_model import SensorModel
 from localization.motion_model import MotionModel
-
 from nav_msgs.msg import Odometry
-from geometry_msgs.msg import PoseWithCovarianceStamped
-
+from geometry_msgs.msg import Pose, Quaternion, TransformStamped, PoseWithCovarianceStamped
 from rclpy.node import Node
+from rclpy.qos import QoSProfile
 import rclpy
-
-assert rclpy
+import numpy as np
+from sensor_msgs.msg import LaserScan
 
 
 class ParticleFilter(Node):
@@ -15,49 +14,21 @@ class ParticleFilter(Node):
     def __init__(self):
         super().__init__("particle_filter")
 
-        self.declare_parameter('particle_filter_frame', "default")
+        self.declare_parameter('particle_filter_frame', "particle_filter_frame")
         self.particle_filter_frame = self.get_parameter('particle_filter_frame').get_parameter_value().string_value
 
-        #  *Important Note #1:* It is critical for your particle
-        #     filter to obtain the following topic names from the
-        #     parameters for the autograder to work correctly. Note
-        #     that while the Odometry message contains both a pose and
-        #     a twist component, you will only be provided with the
-        #     twist component, so you should rely only on that
-        #     information, and *not* use the pose component.
-        
         self.declare_parameter('odom_topic', "/odom")
         self.declare_parameter('scan_topic', "/scan")
 
         scan_topic = self.get_parameter("scan_topic").get_parameter_value().string_value
         odom_topic = self.get_parameter("odom_topic").get_parameter_value().string_value
 
-        self.laser_sub = self.create_subscription(LaserScan, scan_topic,
-                                                  self.laser_callback,
-                                                  1)
-
-        self.odom_sub = self.create_subscription(Odometry, odom_topic,
-                                                 self.odom_callback,
-                                                 1)
-
-        #  *Important Note #2:* You must respond to pose
-        #     initialization requests sent to the /initialpose
-        #     topic. You can test that this works properly using the
-        #     "Pose Estimate" feature in RViz, which publishes to
-        #     /initialpose.
-
-        self.pose_sub = self.create_subscription(PoseWithCovarianceStamped, "/initialpose",
-                                                 self.pose_callback,
-                                                 1)
-
-        #  *Important Note #3:* You must publish your pose estimate to
-        #     the following topic. In particular, you must use the
-        #     pose field of the Odometry message. You do not need to
-        #     provide the twist part of the Odometry message. The
-        #     odometry you publish here should be with respect to the
-        #     "/map" frame.
+        self.laser_sub = self.create_subscription(LaserScan, scan_topic, self.laser_callback, 1)
+        self.odom_sub = self.create_subscription(Odometry, odom_topic, self.odom_callback, 1)
+        self.pose_sub = self.create_subscription(PoseWithCovarianceStamped, "/initialpose", self.pose_callback, 1)
 
         self.odom_pub = self.create_publisher(Odometry, "/pf/pose/odom", 1)
+        self.tf_pub = self.create_publisher(TransformStamped, "/tf", 1)
 
         # Initialize the models
         self.motion_model = MotionModel(self)
@@ -65,19 +36,71 @@ class ParticleFilter(Node):
 
         self.get_logger().info("=============+READY+=============")
 
-        # Implement the MCL algorithm
-        # using the sensor model and the motion model
-        #
-        # Make sure you include some way to initialize
-        # your particles, ideally with some sort
-        # of interactive interface in rviz
-        #
-        # Publish a transformation frame between the map
-        # and the particle_filter_frame.
+        self.particles = None
+        self.initialized = False
 
+    def motion_update(self, odometry):
+        if self.particles is not None:
+            self.particles = self.motion_model.evaluate(self.particles, odometry)
+
+    def sensor_update(self, scan):
+        if self.particles is not None:
+            weights = self.sensor_model.evaluate(self.particles, scan)
+            self.resample_particles(weights)
+
+    def resample_particles(self, weights):
+        indices = np.random.choice(len(self.particles), len(self.particles), p=weights)
+        self.particles = self.particles[indices]
+
+    def odom_callback(self, msg):
+        # Only use the twist component of the odometry message
+        odometry = [msg.twist.twist.linear.x, msg.twist.twist.linear.y, msg.twist.twist.angular.z]
+        self.motion_update(odometry)
+
+    def laser_callback(self, msg):
+        if self.particles is not None:
+            scan = [z for z in msg.ranges if z != float('inf')]
+            self.sensor_update(scan)
+
+    def pose_callback(self, msg):
+        if not self.initialized:
+            pose = msg.pose.pose
+            self.initialize_particles(pose)
+            self.initialized = True
+
+    def initialize_particles(self, pose):
+        num_particles = 1000
+        x, y, theta = pose.position.x, pose.position.y, self.quaternion_to_yaw(pose.orientation)
+        self.particles = np.array([[x, y, theta]] * num_particles)
+
+    def quaternion_to_yaw(self, quaternion):
+        return np.arctan2(2.0 * (quaternion.w * quaternion.z + quaternion.x * quaternion.y),
+                          1.0 - 2.0 * (quaternion.y * quaternion.y + quaternion.z * quaternion.z))
+
+    def publish_pose(self):
+        if self.particles is not None:
+            avg_pose = np.mean(self.particles, axis=0)
+            pose = Pose()
+            pose.position.x, pose.position.y, _ = avg_pose
+            pose.orientation = Quaternion()
+            self.publish_transform(pose)
+
+    def publish_transform(self, pose):
+        transform = TransformStamped()
+        transform.header.stamp = self.get_clock().now().to_msg()
+        transform.header.frame_id = "map"
+        transform.child_frame_id = self.particle_filter_frame
+        transform.transform.translation.x = pose.position.x
+        transform.transform.translation.y = pose.position.y
+        transform.transform.translation.z = 0.0
+        transform.transform.rotation = pose.orientation
+        self.tf_pub.publish(transform)
 
 def main(args=None):
     rclpy.init(args=args)
     pf = ParticleFilter()
     rclpy.spin(pf)
     rclpy.shutdown()
+
+if __name__ == '__main__':
+    main()
