@@ -86,26 +86,23 @@ class SensorModel:
         returns:
             No return type. Directly modify `self.sensor_model_table`.
         """
-        # Calculate the range values for the table
-        range_values = np.linspace(0, self.table_width - 1, self.table_width)
+
 
         # Compute sensor model probabilities
-        for i, z_k in enumerate(range_values):
-            p_hit = self.alpha_hit * np.exp(-(z_k ** 2) / (2 * self.sigma_hit ** 2))
-            p_short = self.alpha_short / (1 - np.exp(-self.alpha_short * z_k))
-            p_max = self.alpha_max if z_k == self.table_width - 1 else 0
-            p_rand = self.alpha_rand / self.table_width
-            normalization = p_hit + p_short + p_max + p_rand
-            probs = sum([p_hit, p_short, p_max, p_rand])
+        for i in range(self.table_width):
+            normalization = 0
+            for j in range(self.table_width):
 
-            # Append an extra value to ensure length matches table width
-            probs = np.append(probs, 0)
+                p_hit = self.alpha_hit * np.exp(-(j ** 2) / (2 * self.sigma_hit ** 2))
+                p_short = self.alpha_short / (1 - np.exp(-self.alpha_short * j))
+                p_max = self.alpha_max if j == self.table_width - 1 else 0
+                p_rand = self.alpha_rand / self.table_width
 
-            # Repeat probabilities along columns to match table width
-            self.sensor_model_table[i] = probs
+                probs = sum([p_hit, p_short, p_max, p_rand])
+                normalization += probs
+                self.sensor_model_table[j, i] = probs
 
-        # Normalize columns
-        self.sensor_model_table /= np.sum(self.sensor_model_table, axis=0)
+            self.sensor_model_table[:, i] /= normalization
 
 
 
