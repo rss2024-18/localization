@@ -31,11 +31,11 @@ class SensorModel:
 
         ####################################
         # Adjust these parameters
-        self.alpha_hit = 0
-        self.alpha_short = 0
-        self.alpha_max = 0
-        self.alpha_rand = 0
-        self.sigma_hit = 0
+        self.alpha_hit = 0.74
+        self.alpha_short = 0.07
+        self.alpha_max = 0.07
+        self.alpha_rand = 0.12
+        self.sigma_hit = 8.0
 
         # Your sensor table will be a `table_width` x `table_width` np array:
         self.table_width = 201
@@ -87,7 +87,25 @@ class SensorModel:
             No return type. Directly modify `self.sensor_model_table`.
         """
 
-        raise NotImplementedError
+
+        # Compute sensor model probabilities
+        for i in range(self.table_width):
+            normalization = 0
+            for j in range(self.table_width):
+
+                p_hit = self.alpha_hit * np.exp(-(j ** 2) / (2 * self.sigma_hit ** 2))
+                p_short = self.alpha_short / (1 - np.exp(-self.alpha_short * j))
+                p_max = self.alpha_max if j == self.table_width - 1 else 0
+                p_rand = self.alpha_rand / self.table_width
+
+                probs = sum([p_hit, p_short, p_max, p_rand])
+                normalization += probs
+                self.sensor_model_table[j, i] = probs
+
+            self.sensor_model_table[:, i] /= normalization
+
+
+
 
     def evaluate(self, particles, observation):
         """
@@ -110,18 +128,25 @@ class SensorModel:
                given the observation and the map.
         """
 
+
         if not self.map_set:
-            return
+            return np.ones(len(particles)) / len(particles)  # Uniform distribution if map is not set
 
-        ####################################
-        # TODO
-        # Evaluate the sensor model here!
-        #
-        # You will probably want to use this function
-        # to perform ray tracing from all the particles.
-        # This produces a matrix of size N x num_beams_per_particle 
-
+        # Evaluate sensor model for each particle
+        weights = []
         scans = self.scan_sim.scan(particles)
+        for particle_scan in scans:
+            weight = 1.0
+            for observed_range, expected_range in zip(observation, particle_scan):
+                if observed_range < self.table_width:
+                    probs = self.sensor_model_table[int(observed_range)]
+                    weight *= probs[int(expected_range)]
+            weights.append(weight)
+        
+        # Normalize weights
+        weights /= np.sum(weights)
+
+        return weights
 
         ####################################
 
