@@ -86,27 +86,40 @@ class SensorModel:
         returns:
             No return type. Directly modify `self.sensor_model_table`.
         """
-        z_max = float('inf') # not sure where z_max is defined
-        d = 7 # or this guy
-        E = 0.1 # this guy too
 
-        # Compute sensor model probabilities
-        for i in range(self.table_width):
-            normalization = 0
-            for j in range(self.table_width):
-                z = j-i
-                p_hit = self.alpha_hit * 1/((2 * np.pi * self.sigma_hit ** 2)**(1/2)) * np.exp(-((z-d)**2) / (2 * self.sigma_hit ** 2)) if (0 <= z <= z_max ) else 0
-                p_short = self.alpha_short *  2 / (d * (1 - z/d)) if (0 <= z <= d) else 0
-                p_max = self.alpha_max / E if (z_max - E <= z <= z_max) else 0
-                p_rand = self.alpha_rand / z_max if (0 <= z <= z_max ) else 0
+        # d x z_k^(i) is probability of measuring z_k^(i) given d
+        z_max = self.table_width - 1
+        for d in range(self.table_width):
+            hit_unnormalized = np.zeros(self.table_width)
+            for z_ki in range(self.table_width):
+                hit_unnormalized[z_ki] = (1/np.sqrt(2*np.pi*self.sigma_hit) * np.exp(-(z_ki-d)**2/(2*self.sigma_hit**2)))
+                p_short = self.alpha_short * (2/d * (1-z_ki/d)) if (z_ki <= d and d != 0) else 0
+                p_max = self.alpha_max if (z_ki == z_max) else 0
+                p_rand = self.alpha_rand/z_max
+                self.sensor_model_table[d, z_ki] = p_short + p_max + p_rand
+            p_hits = self.alpha_hit * hit_unnormalized / np.sum(hit_unnormalized)
+            self.sensor_model_table[d] += p_hits
+            self.sensor_model_table[d] /= np.sum(self.sensor_model_table[d])
 
-                probs = sum([p_hit, p_short, p_max, p_rand])
-                normalization += probs
-                self.sensor_model_table[j, i] = probs
+        # z_max = float('inf') # not sure where z_max is defined
+        # d = 7 # or this guy
+        # E = 0.1 # this guy too
 
-            self.sensor_model_table[:, i] /= normalization
+        # # Compute sensor model probabilities
+        # for i in range(self.table_width):
+        #     normalization = 0
+        #     for j in range(self.table_width):
+        #         z = j-i
+        #         p_hit = self.alpha_hit * 1/((2 * np.pi * self.sigma_hit ** 2)**(1/2)) * np.exp(-((z-d)**2) / (2 * self.sigma_hit ** 2)) if (0 <= z <= z_max ) else 0
+        #         p_short = self.alpha_short *  2 / (d * (1 - z/d)) if (0 <= z <= d) else 0
+        #         p_max = self.alpha_max / E if (z_max - E <= z <= z_max) else 0
+        #         p_rand = self.alpha_rand / z_max if (0 <= z <= z_max ) else 0
 
+        #         probs = sum([p_hit, p_short, p_max, p_rand])
+        #         normalization += probs
+        #         self.sensor_model_table[j, i] = probs
 
+        #     self.sensor_model_table[:, i] /= normalization
 
 
     def evaluate(self, particles, observation):
