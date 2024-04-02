@@ -7,6 +7,10 @@ class MotionModel:
         # TODO
         # Do any precomputation for the motion
         # model here.
+        # TODO: get the ground truth position by listening to the transformation between /map and /base_link
+        # initialize particles by sampling around this area
+        # params.yaml provides N as 200, and recommended numpy
+        # self.previous_prediction = 
 
         pass
 
@@ -32,8 +36,13 @@ class MotionModel:
         """
 
         ####################################
-        # TODO
+        # TODO: add the odometry to each particle in their frame
+        # TODO: add Gaussian noise with np.random
 
+        # for each particle [x_i y_i theta_i]: 
+        # convert [x_i+dx y_i+dy] from the theta_i frame to the theta_i+dtheta frame
+        
+        # store this prediction
         raise NotImplementedError
 
         ####################################
