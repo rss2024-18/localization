@@ -12,10 +12,6 @@ class MotionModel:
         # TODO
         # Do any precomputation for the motion
         # model here.
-        # TODO: get the ground truth position by listening to the transformation between /map and /base_link
-        # initialize particles by sampling around this area
-        # params.yaml provides N as 200, and recommended numpy
-        # self.previous_prediction = 
 
         pass
 
