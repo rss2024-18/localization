@@ -86,26 +86,46 @@ class SensorModel:
         returns:
             No return type. Directly modify `self.sensor_model_table`.
         """
-        # Calculate the range values for the table
-        range_values = np.linspace(0, self.table_width - 1, self.table_width)
+        # Discretization step for range values
+        max_range = self.table_width - 1  # Assuming max range in "pixels" is table_width - 1
+        delta = max_range / (self.table_width - 1)
 
-        # Compute sensor model probabilities
-        for i, z_k in enumerate(range_values):
-            p_hit = self.alpha_hit * np.exp(-(z_k ** 2) / (2 * self.sigma_hit ** 2))
-            p_short = self.alpha_short / (1 - np.exp(-self.alpha_short * z_k))
-            p_max = self.alpha_max if z_k == self.table_width - 1 else 0
-            p_rand = self.alpha_rand / self.table_width
-            normalization = p_hit + p_short + p_max + p_rand
-            probs = sum([p_hit, p_short, p_max, p_rand])
+        # Initialize the sensor model table with zeros
+        self.sensor_model_table = np.zeros((self.table_width, self.table_width))
 
-            # Append an extra value to ensure length matches table width
-            probs = np.append(probs, 0)
+        # Iterate over true distances (i) and observed distances (j)
+        for i in range(self.table_width):
+            true_distance = i * delta  # Convert index to distance
 
-            # Repeat probabilities along columns to match table width
-            self.sensor_model_table[i] = probs
+            # Compute hit probabilities
+            hit_probabilities = np.exp(-0.5 * ((np.arange(self.table_width) * delta - true_distance) ** 2) / (self.sigma_hit ** 2))
+            hit_probabilities /= (self.sigma_hit * np.sqrt(2 * np.pi))  # Normalize the Gaussian
 
-        # Normalize columns
-        self.sensor_model_table /= np.sum(self.sensor_model_table, axis=0)
+            # Compute short probabilities
+            short_probabilities = np.zeros(self.table_width)
+            short_probabilities[:i] = 2 * (1 / true_distance) * (1 - np.arange(i) * delta / true_distance)
+            
+            # Compute max probabilities
+            max_probabilities = np.zeros(self.table_width)
+            max_probabilities[-1] = 1  # All probability mass at the max range
+
+            # Compute random probabilities
+            random_probabilities = np.ones(self.table_width) * (1 / max_range)
+
+            # Combine probabilities
+            combined_probabilities = (self.alpha_hit * hit_probabilities +
+                                    self.alpha_short * short_probabilities +
+                                    self.alpha_max * max_probabilities +
+                                    self.alpha_rand * random_probabilities)
+
+            # Normalize combined probabilities to sum to 1
+            combined_probabilities /= np.sum(combined_probabilities)
+
+            # Assign to the sensor model table
+            self.sensor_model_table[i, :] = combined_probabilities
+
+    print("Sensor model table precomputed")
+
 
 
 
