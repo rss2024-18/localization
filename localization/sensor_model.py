@@ -86,17 +86,19 @@ class SensorModel:
         returns:
             No return type. Directly modify `self.sensor_model_table`.
         """
-
+        z_max = float('inf') # not sure where z_max is defined
+        d = 7 # or this guy
+        E = 0.1 # this guy too
 
         # Compute sensor model probabilities
         for i in range(self.table_width):
             normalization = 0
             for j in range(self.table_width):
-
-                p_hit = self.alpha_hit * np.exp(-(j ** 2) / (2 * self.sigma_hit ** 2))
-                p_short = self.alpha_short / (1 - np.exp(-self.alpha_short * j))
-                p_max = self.alpha_max if j == self.table_width - 1 else 0
-                p_rand = self.alpha_rand / self.table_width
+                z = j-i
+                p_hit = self.alpha_hit * 1/((2 * np.pi * self.sigma_hit ** 2)**(1/2)) * np.exp(-((z-d)**2) / (2 * self.sigma_hit ** 2)) if (0 <= z <= z_max ) else 0
+                p_short = self.alpha_short *  2 / (d * (1 - z/d)) if (0 <= z <= d) else 0
+                p_max = self.alpha_max / E if (z_max - E <= z <= z_max) else 0
+                p_rand = self.alpha_rand / z_max if (0 <= z <= z_max ) else 0
 
                 probs = sum([p_hit, p_short, p_max, p_rand])
                 normalization += probs
