@@ -77,6 +77,7 @@ class ParticleFilter(Node):
             self.initialized = True
 
     def initialize_particles(self, pose):
+        ####Get From params instead !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
         num_particles = 1000
         x, y, theta = pose.position.x, pose.position.y, self.quaternion_to_yaw(pose.orientation)
         self.particles = np.array([[x, y, theta]] * num_particles)
@@ -91,13 +92,30 @@ class ParticleFilter(Node):
         return np.arctan2(2.0 * (quaternion.w * quaternion.z + quaternion.x * quaternion.y),
                           1.0 - 2.0 * (quaternion.y * quaternion.y + quaternion.z * quaternion.z))
 
-    def find_clusters(self):
+    def find_cluster(self):
         db = DBSCAN(eps=0.5).fit(self.particles[:,:2])
         labels = db.labels_
         unique_labels = set(labels)
         largest_cluster_label = max(unique_labels, key=list(labels).count)
         largest_cluster = self.particles[labels == largest_cluster_label]
         return largest_cluster
+    
+    def mean_angle(angles):
+        # Convert angles to unit vectors
+        unit_vectors = np.column_stack((np.cos(angles), np.sin(angles)))
+        # Take the mean of unit vectors
+        mean_vector = np.mean(unit_vectors, axis=0)
+        # Convert mean vector to angle
+        mean_angle = np.arctan2(mean_vector[1], mean_vector[0])
+        return mean_angle
+    
+    def find_average_pos(self):
+        largest_cluster = self.find_cluster()
+        avgx = np.average(largest_cluster[0])
+        avgy = np.average(largest_cluster[1])
+        thetas = largest_cluster[2]
+        avgtheta = self.mean_angle(thetas)
+        return (avgx, avgy, avgtheta)
 
     def publish_pose(self):
         if self.particles is not None:
