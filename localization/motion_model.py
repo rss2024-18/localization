@@ -4,18 +4,21 @@ class MotionModel:
 
     def __init__(self, node):
         ####################################
-        self.N = 200  # Number of particles
-        self.particles = np.zeros((self.N, 3))  # Initialize particles
-        self.alpha = [0.74, 0.07, 0.07, 0.12]  # Noise parameters
-        self.previous_odometry = np.array([0, 0, 0])  # Initialize with zeros or the first odometry reading
-
         # TODO
         # Do any precomputation for the motion
         # model here.
-
-        pass
-
+        self.noise_translational = 0.07  # Standard deviation for translational noise
+        self.noise_rotational = 0.74  # Standard deviation for rotational noise
         ####################################
+    
+
+    def add_odometry_noise(self, odometry):
+        # Add noise to odometry data
+        noisy_odometry = odometry.copy()
+        noisy_odometry[0] += np.random.normal(0, self.noise_translational)  # Add translational noise
+        noisy_odometry[1] += np.random.normal(0, self.noise_translational)
+        noisy_odometry[2] += np.random.normal(0, self.noise_rotational)  # Add rotational noise
+        return noisy_odometry
 
     def evaluate(self, particles, odometry):
         """
@@ -36,34 +39,22 @@ class MotionModel:
                 same size
         """
 
+
         ####################################
-        # TODO: add the odometry to each particle in their frame
-        # TODO: add Gaussian noise with np.random
+        # TODO
+        # Apply motion model with noise
+        noisy_odometry = self.add_odometry_noise(odometry)
 
-        # for each particle [x_i y_i theta_i]: 
-        # convert [x_i+dx y_i+dy] from the theta_i frame to the theta_i+dtheta frame
-        
-        # store this prediction
-        d_rot1 = np.arctan2(odometry[1], odometry[0]) - self.previous_odometry[2]
-        d_trans = np.sqrt(odometry[0]**2 + odometry[1]**2)
-        d_rot2 = odometry[2] - self.previous_odometry[2] - d_rot1
+        # Update particle positions based on noisy odometry
+        for particle in particles:
+            theta = particle[2]
+            dx = noisy_odometry[0] * np.cos(theta) - noisy_odometry[1] * np.sin(theta)
+            dy = noisy_odometry[0] * np.sin(theta) + noisy_odometry[1] * np.cos(theta)
+            dtheta = noisy_odometry[2]
 
-        for i in range(self.N):
-            # Add odometry to each particle
-            x, y, theta = particles[i]
-            
-            # Sample noise for each motion component
-            noisy_d_rot1 = d_rot1 - np.random.normal(0, np.sqrt(self.alpha[0] * d_rot1**2 + self.alpha[1] * d_trans**2))
-            noisy_d_trans = d_trans - np.random.normal(0, np.sqrt(self.alpha[2] * d_trans**2 + self.alpha[3] * (d_rot1 + d_rot2)**2))
-            noisy_d_rot2 = d_rot2 - np.random.normal(0, np.sqrt(self.alpha[0] * d_rot2**2 + self.alpha[1] * d_trans**2))
-
-            # Apply motion model to update particle position
-            particles[i][0] = x + noisy_d_trans * np.cos(theta + noisy_d_rot1)
-            particles[i][1] = y + noisy_d_trans * np.sin(theta + noisy_d_rot1)
-            particles[i][2] = theta + noisy_d_rot1 + noisy_d_rot2
-
-        self.previous_odometry = odometry.copy()  # Update the previous odometry with the current odometry
+            particle[0] += dx
+            particle[1] += dy
+            particle[2] += dtheta
 
         return particles
-
         ####################################
