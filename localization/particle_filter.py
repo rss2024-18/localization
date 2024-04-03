@@ -4,7 +4,7 @@ from nav_msgs.msg import Odometry
 from geometry_msgs.msg import Pose, Quaternion, TransformStamped, PoseWithCovarianceStamped
 from rclpy.node import Node
 from rclpy.qos import QoSProfile
-from scikit_learn.cluster import KMeans
+from scikit_learn.cluster import DBSCAN
 import rclpy
 import numpy as np
 from sensor_msgs.msg import LaserScan
@@ -80,7 +80,7 @@ class ParticleFilter(Node):
         num_particles = 1000
         x, y, theta = pose.position.x, pose.position.y, self.quaternion_to_yaw(pose.orientation)
         self.particles = np.array([[x, y, theta]] * num_particles)
-        #todo!!!!! Figure out how to make this scaled wrt the map we are given 
+        #todo!!!!! Figure out how to make this scaled wrt the map we are given !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
         for particle in range(len(self.particles[1])):
             part = np.random.rand(1,3) - 0.5 
             part[0,1] *= 10
@@ -90,6 +90,14 @@ class ParticleFilter(Node):
     def quaternion_to_yaw(self, quaternion):
         return np.arctan2(2.0 * (quaternion.w * quaternion.z + quaternion.x * quaternion.y),
                           1.0 - 2.0 * (quaternion.y * quaternion.y + quaternion.z * quaternion.z))
+
+    def find_clusters(self):
+        db = DBSCAN(eps=0.5).fit(self.particles[:,:2])
+        labels = db.labels_
+        unique_labels = set(labels)
+        largest_cluster_label = max(unique_labels, key=list(labels).count)
+        largest_cluster = self.particles[labels == largest_cluster_label]
+        return largest_cluster
 
     def publish_pose(self):
         if self.particles is not None:
