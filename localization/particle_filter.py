@@ -8,6 +8,7 @@ from scikit_learn.cluster import KMeans
 import rclpy
 import numpy as np
 from sensor_msgs.msg import LaserScan
+import threading
 
 
 class ParticleFilter(Node):
@@ -40,6 +41,8 @@ class ParticleFilter(Node):
         self.particles = None
         self.initialized = False
 
+        self.particle_lock = threading.Lock()
+
     def motion_update(self, odometry):
         if self.particles is not None:
             self.particles = self.motion_model.evaluate(self.particles, odometry)
@@ -54,14 +57,18 @@ class ParticleFilter(Node):
         self.particles = self.particles[indices]
 
     def odom_callback(self, msg):
+        self.particle_lock.acquire()
         # Only use the twist component of the odometry message
         odometry = [msg.twist.twist.linear.x, msg.twist.twist.linear.y, msg.twist.twist.angular.z]
         self.motion_update(odometry)
+        self.particle_lock.release()
 
     def laser_callback(self, msg):
+        self.particle_lock.acquire()
         if self.particles is not None:
             scan = [z for z in msg.ranges if z != float('inf')]
             self.sensor_update(scan)
+        self.particle_lock.release()
 
     def pose_callback(self, msg):
         if not self.initialized:
