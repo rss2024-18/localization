@@ -140,38 +140,27 @@ class SensorModel:
                 from the actual lidar. THIS IS Z_K. Each range in Z_K is Z_K^i
 
         returns:
-           probabilities: A vector of length N representing
-               the probability of each particle existing
-               given the observation and the map.
+            probabilities: A vector of length N representing
+                the probability of each particle existing
+                given the observation and the map.
         """
 
-
         if not self.map_set:
-            return # np.ones(len(particles)) / len(particles)  # Uniform distribution if map is not set
+            return np.ones(len(particles)) / len(particles)  # Uniform distribution if map is not set
 
         scans = self.scan_sim.scan(particles)
-        N = scans.shape[0]
-        probabilities = np.zeros(N)
-        for i in range(N):
-            
-            probabilities[i] = self.sensor_model_table[]
+        num_particles = scans.shape[0]
+        weights = np.zeros(num_particles)
 
+        for i, particle_scan in enumerate(scans):
+            weight = 1.0
+            for observed_range, expected_range in zip(observation, particle_scan):
+                prob_table_row = self.sensor_model_table[int(observed_range)]
+                weight *= prob_table_row[int(expected_range)]
+            weights[i] = weight
 
-        # # Evaluate sensor model for each particle
-        # weights = []
-        # scans = self.scan_sim.scan(particles)
-        # for particle_scan in scans:
-        #     weight = 1.0
-        #     for observed_range, expected_range in zip(observation, particle_scan):
-        #         if observed_range < self.table_width:
-        #             probs = self.sensor_model_table[int(observed_range)]
-        #             weight *= probs[int(expected_range)]
-        #     weights.append(weight)
-        
-        # # Normalize weights
-        # weights /= np.sum(weights)
+        return weights
 
-        # return weights
 
         ####################################
 
