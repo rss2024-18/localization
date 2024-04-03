@@ -145,24 +145,21 @@ class SensorModel:
                 given the observation and the map.
         """
 
+        num_particles = particles.shape[0]
         if not self.map_set:
-            return np.ones(len(particles)) / len(particles)  # Uniform distribution if map is not set
+            return np.ones(num_particles) / num_particles # uniform distribution if map is not set
+        
+        scans = self.scan_sim.scan(particles) # N particles x M laser beams per particle
 
-        scans = self.scan_sim.scan(particles)
-        num_particles = scans.shape[0]
-        weights = np.zeros(num_particles)
-
+        probabilities = np.ones(num_particles)
         for i, particle_scan in enumerate(scans):
-            weight = 1.0
-            for observed_range, expected_range in zip(observation, particle_scan):
-                prob_table_row = self.sensor_model_table[int(observed_range)]
-                weight *= prob_table_row[int(expected_range)]
-            weights[i] = weight
-
-        return weights
-
-
-        ####################################
+            # assume observation has already been downsampled => should be M long
+            for observed_range_m, expected_range_m in zip(observation, particle_scan):
+                observed_range_px = np.clip(int(observed_range_m / (self.resolution * self.lidar_scale_to_map_scale)), 0, self.table_width-1)
+                expected_range_px = np.clip(int(expected_range_m / (self.resolution * self.lidar_scale_to_map_scale)), 0, self.table_width-1)
+                probabilities[i] *= self.sensor_model_table[observed_range_px][expected_range_px]
+        
+        return probabilities
 
     def map_callback(self, map_msg):
         # Convert the map to a numpy array

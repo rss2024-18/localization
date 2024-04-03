@@ -45,10 +45,17 @@ class ParticleFilter(Node):
 
     def sensor_update(self, scan):
         if self.particles is not None:
+            ## TODO downsample scan first 
+            ## right now this works with no downsampling in the sim because the laser scans 
+            ## have 100 beams anyways
+            self.get_logger().info(str(len(scan)))
             weights = self.sensor_model.evaluate(self.particles, scan)
             self.resample_particles(weights)
 
     def resample_particles(self, weights):
+        ## TODO debug np.random.choice since our p is not designed to sum to 1
+        ## can normalize? added below for now
+        weights *= 1/np.sum(weights)
         indices = np.random.choice(len(self.particles), len(self.particles), p=weights)
         self.particles = self.particles[indices]
 

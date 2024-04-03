@@ -3,6 +3,7 @@ import numpy as np
 class MotionModel:
 
     def __init__(self, node):
+        pass
         ####################################
         # TODO
         # Do any precomputation for the motion
