@@ -46,7 +46,7 @@ class MotionModel:
         # store this prediction
         d_rot1 = np.arctan2(odometry[1], odometry[0]) - self.previous_odometry[2]
         d_trans = np.sqrt(odometry[0]**2 + odometry[1]**2)
-        d_rot2 = odometry[2] - self.previous_odometry[2] - d_rot1
+        d_rot2 = odometry[2] - d_rot1
 
         for i in range(self.N):
             # Add odometry to each particle
