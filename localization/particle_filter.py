@@ -4,6 +4,7 @@ from nav_msgs.msg import Odometry
 from geometry_msgs.msg import Pose, Quaternion, TransformStamped, PoseWithCovarianceStamped
 from rclpy.node import Node
 from rclpy.qos import QoSProfile
+from scikit_learn.cluster import KMeans
 import rclpy
 import numpy as np
 from sensor_msgs.msg import LaserScan
@@ -72,6 +73,12 @@ class ParticleFilter(Node):
         num_particles = 1000
         x, y, theta = pose.position.x, pose.position.y, self.quaternion_to_yaw(pose.orientation)
         self.particles = np.array([[x, y, theta]] * num_particles)
+        #todo!!!!! Figure out how to make this scaled wrt the map we are given 
+        for particle in range(len(self.particles[1])):
+            part = np.random.rand(1,3) - 0.5 
+            part[0,1] *= 10
+            part[2] *= 2*np.pi
+            self.particles[particle] += part 
 
     def quaternion_to_yaw(self, quaternion):
         return np.arctan2(2.0 * (quaternion.w * quaternion.z + quaternion.x * quaternion.y),
