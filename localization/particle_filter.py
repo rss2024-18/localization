@@ -5,6 +5,7 @@ from geometry_msgs.msg import Pose, Quaternion, TransformStamped, PoseWithCovari
 from rclpy.node import Node
 from rclpy.qos import QoSProfile
 from scikit_learn.cluster import DBSCAN
+from scipy.spatial.transform import Rotation
 import rclpy
 import numpy as np
 from sensor_msgs.msg import LaserScan
@@ -67,7 +68,8 @@ class ParticleFilter(Node):
         self.particle_lock.acquire()
         # Only use the twist component of the odometry message
         odometry = [msg.twist.twist.linear.x, msg.twist.twist.linear.y, msg.twist.twist.angular.z]
-        self.motion_update(odometry)
+        updated_particles = self.motion_model.evaluate(self.particles, odometry)
+        self.particles = updated_particles
         self.particle_lock.release()
 
     def laser_callback(self, msg):
@@ -96,8 +98,9 @@ class ParticleFilter(Node):
             self.particles[particle] += part 
 
     def quaternion_to_yaw(self, quaternion):
-        return np.arctan2(2.0 * (quaternion.w * quaternion.z + quaternion.x * quaternion.y),
-                          1.0 - 2.0 * (quaternion.y * quaternion.y + quaternion.z * quaternion.z))
+        r = Rotation.from_quat(quaternion)
+        euler_angles = r.as_euler('xyz')
+        return euler_angles[2]
 
     def find_cluster(self):
         db = DBSCAN(eps=0.5).fit(self.particles[:,:2])
@@ -126,10 +129,11 @@ class ParticleFilter(Node):
 
     def publish_pose(self):
         if self.particles is not None:
-            avg_pose = np.mean(self.particles, axis=0)
+            avg_pose = self.find_average_pos()
             pose = Pose()
-            pose.position.x, pose.position.y, _ = avg_pose
-            pose.orientation = Quaternion()
+            pose.position.x, pose.position.y = avg_pose(0), avg_pose(1)
+            r = Rotation.from_euler('xyz', [0, 0, avg_pose(2)])
+            pose.orientation = r.as_quat()
             self.publish_transform(pose)
 
     def publish_transform(self, pose):
