@@ -65,7 +65,8 @@ class ParticleFilter(Node):
         # weights *= 1/np.sum(weights)
         # indices = np.random.choice(len(self.particles), len(self.particles), p=weights)
         # self.particles = self.particles[indices]
-        self.particles = np.random.choice(self.particles, weights)
+        #self.particles = np.random.choice(self.particles, weights)
+        self.get_logger().info("RESAMPLING BUT NOT REALLY")
 
 
     def odom_callback(self, msg):
@@ -101,6 +102,7 @@ class ParticleFilter(Node):
 
     def initialize_particles(self, x, y):
         ####Get From params instead !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        self.get_logger().info("initialize_particles")
         num_particles = 100
         #x, y, theta = pose.position.x, pose.position.y, self.quaternion_to_yaw(pose.orientation)
         self.particles = np.array([[x, y, 0]] * num_particles)
@@ -108,8 +110,8 @@ class ParticleFilter(Node):
         for particle in range(len(self.particles)):
             part = np.random.rand(1,3) - 0.5 
             #print(part)
-            part[0][0] *= 10
-            part[0][1] *= 10
+            part[0][0] = x + part[0][0] * 0.1
+            part[0][1] = y + part[0][0] * 0.1
             part[0][2] *= 2*np.pi
             #print(part)
             self.particles[particle] = part[0]
@@ -158,7 +160,6 @@ class ParticleFilter(Node):
             r = Rotation.from_euler('xyz', [0, 0, avg_pose[2]])
             x, y, z, w = r.as_quat()[0], r.as_quat()[1], r.as_quat()[2], r.as_quat()[3]
             pose.orientation.x, pose.orientation.y, pose.orientation.z, pose.orientation.w = x, y, z, w
-            #self.get_logger().info("publish_pose")
             self.publish_transform(pose)
             
     def publish_particles(self):
@@ -170,7 +171,7 @@ class ParticleFilter(Node):
             particle_pose = Pose()
             particle_pose.position.x = particle[0]
             particle_pose.position.y = particle[1]
-            particle_pose.position.z = 0.0
+            particle_pose.position.z = 0.1
             r = Rotation.from_euler('xyz', [0, 0, particle[2]])
             quat = r.as_quat()
             particle_pose.orientation.x = quat[0]
@@ -178,7 +179,6 @@ class ParticleFilter(Node):
             particle_pose.orientation.z = quat[2]
             particle_pose.orientation.w = quat[3]
             particle_array_msg.poses.append(particle_pose)
-        self.get_logger().info(str(self.particles[0]))
         self.particles_pub.publish(particle_array_msg)
 
     

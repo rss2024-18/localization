@@ -3,6 +3,7 @@ import numpy as np
 class MotionModel:
 
     def __init__(self, node):
+        self.last_odom = [0.0, 0.0, 0.0]
         pass
         ####################################
         # TODO
@@ -44,9 +45,11 @@ class MotionModel:
         ####################################
         # TODO
         # Apply motion model with noise
-
-        noisy_odometry = odometry.copy()
-
+        noisy_odometry = [0.0, 0.0, 0.0]
+        noisy_odometry[0] = odometry.copy()[0] - self.last_odom[0]
+        noisy_odometry[1] = odometry.copy()[1] - self.last_odom[1]
+        noisy_odometry[2] = odometry.copy()[2] - self.last_odom[2]
+        new_particles=particles.copy()
         # Update particle positions based on noisy odometry
         for particle in particles:
             theta = particle[2]
@@ -57,6 +60,8 @@ class MotionModel:
             particle[0] += dx
             particle[1] += dy
             particle[2] += dtheta
+            new_particles.append(particle)
 
-        return particles
+        self.last_odom = noisy_odometry
+        return new_particles
         ####################################
