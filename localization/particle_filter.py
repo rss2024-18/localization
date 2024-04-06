@@ -28,8 +28,8 @@ class ParticleFilter(Node):
         odom_topic = self.get_parameter("odom_topic").get_parameter_value().string_value
 
         self.laser_sub = self.create_subscription(LaserScan, scan_topic, self.laser_callback, 1)
-        self.odom_sub = self.create_subscription(Odometry, odom_topic, self.odom_callback, 1)
-        self.pose_sub = self.create_subscription(PointStamped, "/clicked_point", self.pose_callback, 1)
+        self.odom_sub = self.create_subscription(Odometry, odom_topic, self.odom_callback, 10)
+        self.pose_sub = self.create_subscription(PointStamped, "/clicked_point", self.pose_callback, 10)
 
         #self.odom_pub = self.create_publisher(Odometry, "/pf/pose/odom", 1)
         self.particles_pub = self.create_publisher(PoseArray, "/particles", 1)
@@ -55,7 +55,7 @@ class ParticleFilter(Node):
             ## TODO downsample scan first 
             ## right now this works with no downsampling in the sim because the laser scans 
             ## have 100 beams anyways
-            self.get_logger().info(str(len(scan)))
+            #self.get_logger().info(str(len(scan)))
             weights = self.sensor_model.evaluate(self.particles, scan)
             self.resample_particles(weights)
 
@@ -69,8 +69,10 @@ class ParticleFilter(Node):
 
 
     def odom_callback(self, msg):
+        #self.get_logger().info("odom_callback")
         self.particle_lock.acquire()
         if not self.initialized:
+            self.particle_lock.release()
             return
             # pose = msg.pose.pose
             # self.initialize_particles(pose)
@@ -80,6 +82,7 @@ class ParticleFilter(Node):
         updated_particles = self.motion_model.evaluate(self.particles, odometry)
         self.particles = updated_particles
         self.particle_lock.release()
+        self.publish_pose()
 
     def laser_callback(self, msg):
         self.particle_lock.acquire()
@@ -89,16 +92,18 @@ class ParticleFilter(Node):
         self.particle_lock.release()
 
     def pose_callback(self, msg):
+        #self.get_logger().info("pose_callback")
         if not self.initialized:
-            pose = msg.pose.pose
-            self.initialize_particles(pose)
+            x = msg.point.x
+            y = msg.point.y
+            self.initialize_particles(x, y)
             self.initialized = True
 
-    def initialize_particles(self, pose):
+    def initialize_particles(self, x, y):
         ####Get From params instead !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-        num_particles = 1000
-        x, y, theta = pose.position.x, pose.position.y, self.quaternion_to_yaw(pose.orientation)
-        self.particles = np.array([[x, y, theta]] * num_particles)
+        num_particles = 100
+        #x, y, theta = pose.position.x, pose.position.y, self.quaternion_to_yaw(pose.orientation)
+        self.particles = np.array([[x, y, 0]] * num_particles)
         #todo!!!!! Figure out how to make this scaled wrt the map we are given !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
         for particle in range(len(self.particles)):
             part = np.random.rand(1,3) - 0.5 
@@ -128,7 +133,7 @@ class ParticleFilter(Node):
         largest_cluster = self.particles[labels == largest_cluster_label]
         return largest_cluster
     
-    def mean_angle(angles):
+    def mean_angle(self, angles):
         # Convert angles to unit vectors
         unit_vectors = np.column_stack((np.cos(angles), np.sin(angles)))
         # Take the mean of unit vectors
@@ -149,18 +154,23 @@ class ParticleFilter(Node):
         if self.particles is not None:
             avg_pose = self.find_average_pos()
             pose = Pose()
-            pose.position.x, pose.position.y = avg_pose(0), avg_pose(1)
-            r = Rotation.from_euler('xyz', [0, 0, avg_pose(2)])
-            pose.orientation = r.as_quat()
+            pose.position.x, pose.position.y = avg_pose[0], avg_pose[1]
+            r = Rotation.from_euler('xyz', [0, 0, avg_pose[2]])
+            x, y, z, w = r.as_quat()[0], r.as_quat()[1], r.as_quat()[2], r.as_quat()[3]
+            pose.orientation.x, pose.orientation.y, pose.orientation.z, pose.orientation.w = x, y, z, w
+            #self.get_logger().info("publish_pose")
             self.publish_transform(pose)
             
     def publish_particles(self):
         particle_array_msg = PoseArray()
+        particle_array_msg.header.stamp = self.get_clock().now().to_msg()
+        particle_array_msg.header.frame_id = "map"
+
         for particle in self.particles: 
             particle_pose = Pose()
             particle_pose.position.x = particle[0]
             particle_pose.position.y = particle[1]
-            particle_pose.position.z = 0
+            particle_pose.position.z = 0.0
             r = Rotation.from_euler('xyz', [0, 0, particle[2]])
             quat = r.as_quat()
             particle_pose.orientation.x = quat[0]
@@ -168,6 +178,7 @@ class ParticleFilter(Node):
             particle_pose.orientation.z = quat[2]
             particle_pose.orientation.w = quat[3]
             particle_array_msg.poses.append(particle_pose)
+        self.get_logger().info(str(self.particles[0]))
         self.particles_pub.publish(particle_array_msg)
 
     
@@ -181,7 +192,7 @@ class ParticleFilter(Node):
         transform.transform.translation.z = 0.0
         transform.transform.rotation = pose.orientation
         self.tf_pub.publish(transform)
-        self.particles_pub.publish(self.particles) #fix this
+        #self.particles_pub.publish(self.particles) #fix this
         self.publish_particles()
 
 def main(args=None):
