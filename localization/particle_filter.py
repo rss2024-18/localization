@@ -1,7 +1,7 @@
 from localization.sensor_model import SensorModel
 from localization.motion_model import MotionModel
 from nav_msgs.msg import Odometry
-from geometry_msgs.msg import Pose, Quaternion, TransformStamped, PoseWithCovarianceStamped
+from geometry_msgs.msg import Pose, Quaternion, TransformStamped, PoseWithCovarianceStamped, PointStamped, PoseArray
 from rclpy.node import Node
 from rclpy.qos import QoSProfile
 from sklearn.cluster import DBSCAN
@@ -29,9 +29,10 @@ class ParticleFilter(Node):
 
         self.laser_sub = self.create_subscription(LaserScan, scan_topic, self.laser_callback, 1)
         self.odom_sub = self.create_subscription(Odometry, odom_topic, self.odom_callback, 1)
-        self.pose_sub = self.create_subscription(PoseWithCovarianceStamped, "/initialpose", self.pose_callback, 1)
+        self.pose_sub = self.create_subscription(PointStamped, "/clicked_point", self.pose_callback, 1)
 
         #self.odom_pub = self.create_publisher(Odometry, "/pf/pose/odom", 1)
+        self.particles_pub = self.create_publisher(PoseArray, "/particles", 1)
         self.tf_pub = self.create_publisher(TransformStamped, "/tf", 1)
 
         # Initialize the models
@@ -61,16 +62,19 @@ class ParticleFilter(Node):
     def resample_particles(self, weights):
         ## TODO debug np.random.choice since our p is not designed to sum to 1
         ## can normalize? added below for now
-        weights *= 1/np.sum(weights)
-        indices = np.random.choice(len(self.particles), len(self.particles), p=weights)
-        self.particles = self.particles[indices]
+        # weights *= 1/np.sum(weights)
+        # indices = np.random.choice(len(self.particles), len(self.particles), p=weights)
+        # self.particles = self.particles[indices]
+        self.particles = np.random.choice(self.particles, weights)
+
 
     def odom_callback(self, msg):
         self.particle_lock.acquire()
         if not self.initialized:
-            pose = msg.pose.pose
-            self.initialize_particles(pose)
-            self.initialized = True
+            return
+            # pose = msg.pose.pose
+            # self.initialize_particles(pose)
+            # self.initialized = True
         # Only use the twist component of the odometry message
         odometry = [msg.twist.twist.linear.x, msg.twist.twist.linear.y, msg.twist.twist.angular.z]
         updated_particles = self.motion_model.evaluate(self.particles, odometry)
@@ -96,11 +100,14 @@ class ParticleFilter(Node):
         x, y, theta = pose.position.x, pose.position.y, self.quaternion_to_yaw(pose.orientation)
         self.particles = np.array([[x, y, theta]] * num_particles)
         #todo!!!!! Figure out how to make this scaled wrt the map we are given !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-        for particle in range(len(self.particles[1])):
+        for particle in range(len(self.particles)):
             part = np.random.rand(1,3) - 0.5 
-            part[0,1] *= 10
-            part[2] *= 2*np.pi
-            self.particles[particle] += part 
+            #print(part)
+            part[0][0] *= 10
+            part[0][1] *= 10
+            part[0][2] *= 2*np.pi
+            #print(part)
+            self.particles[particle] = part[0]
 
     def quaternion_to_yaw(self, quaternion):
         x = quaternion.x
@@ -146,7 +153,24 @@ class ParticleFilter(Node):
             r = Rotation.from_euler('xyz', [0, 0, avg_pose(2)])
             pose.orientation = r.as_quat()
             self.publish_transform(pose)
+            
+    def publish_particles(self):
+        particle_array_msg = PoseArray()
+        for particle in self.particles: 
+            particle_pose = Pose()
+            particle_pose.position.x = particle[0]
+            particle_pose.position.y = particle[1]
+            particle_pose.position.z = 0
+            r = Rotation.from_euler('xyz', [0, 0, particle[2]])
+            quat = r.as_quat()
+            particle_pose.orientation.x = quat[0]
+            particle_pose.orientation.y = quat[1]
+            particle_pose.orientation.z = quat[2]
+            particle_pose.orientation.w = quat[3]
+            particle_array_msg.poses.append(particle_pose)
+        self.particles_pub.publish(particle_array_msg)
 
+    
     def publish_transform(self, pose):
         transform = TransformStamped()
         transform.header.stamp = self.get_clock().now().to_msg()
@@ -157,6 +181,8 @@ class ParticleFilter(Node):
         transform.transform.translation.z = 0.0
         transform.transform.rotation = pose.orientation
         self.tf_pub.publish(transform)
+        self.particles_pub.publish(self.particles) #fix this
+        self.publish_particles()
 
 def main(args=None):
     rclpy.init(args=args)
