@@ -4,7 +4,7 @@ from nav_msgs.msg import Odometry
 from geometry_msgs.msg import Pose, Quaternion, TransformStamped, PoseWithCovarianceStamped
 from rclpy.node import Node
 from rclpy.qos import QoSProfile
-from scikit_learn.cluster import DBSCAN
+from sklearn.cluster import DBSCAN
 from scipy.spatial.transform import Rotation
 import rclpy
 import numpy as np
@@ -23,14 +23,15 @@ class ParticleFilter(Node):
         self.declare_parameter('odom_topic', "/odom")
         self.declare_parameter('scan_topic', "/scan")
 
-        scan_topic = self.get_parameter("scan_topic").get_parameter_value().string_value
+        #scan_topic = self.get_parameter("scan_topic").get_parameter_value().string_value
+        scan_topic = "/noscans"
         odom_topic = self.get_parameter("odom_topic").get_parameter_value().string_value
 
         self.laser_sub = self.create_subscription(LaserScan, scan_topic, self.laser_callback, 1)
         self.odom_sub = self.create_subscription(Odometry, odom_topic, self.odom_callback, 1)
         self.pose_sub = self.create_subscription(PoseWithCovarianceStamped, "/initialpose", self.pose_callback, 1)
 
-        self.odom_pub = self.create_publisher(Odometry, "/pf/pose/odom", 1)
+        #self.odom_pub = self.create_publisher(Odometry, "/pf/pose/odom", 1)
         self.tf_pub = self.create_publisher(TransformStamped, "/tf", 1)
 
         # Initialize the models
@@ -66,6 +67,10 @@ class ParticleFilter(Node):
 
     def odom_callback(self, msg):
         self.particle_lock.acquire()
+        if not self.initialized:
+            pose = msg.pose.pose
+            self.initialize_particles(pose)
+            self.initialized = True
         # Only use the twist component of the odometry message
         odometry = [msg.twist.twist.linear.x, msg.twist.twist.linear.y, msg.twist.twist.angular.z]
         updated_particles = self.motion_model.evaluate(self.particles, odometry)
@@ -98,7 +103,13 @@ class ParticleFilter(Node):
             self.particles[particle] += part 
 
     def quaternion_to_yaw(self, quaternion):
-        r = Rotation.from_quat(quaternion)
+        x = quaternion.x
+        y = quaternion.y
+        z = quaternion.z
+        w = quaternion.w
+
+        scipy_quaternion = (x, y, z, w)
+        r = Rotation.from_quat(scipy_quaternion)
         euler_angles = r.as_euler('xyz')
         return euler_angles[2]
 
