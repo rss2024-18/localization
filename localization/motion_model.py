@@ -51,7 +51,9 @@ class MotionModel:
         noisy_odometry[2] = odometry.copy()[2] - self.last_odom[2]
         new_particles=particles.copy()
         # Update particle positions based on noisy odometry
+        ind = -1
         for particle in particles:
+            ind = ind + 1
             theta = particle[2]
             dx = noisy_odometry[0] * np.cos(theta) - noisy_odometry[1] * np.sin(theta)
             dy = noisy_odometry[0] * np.sin(theta) + noisy_odometry[1] * np.cos(theta)
@@ -60,7 +62,7 @@ class MotionModel:
             particle[0] += dx
             particle[1] += dy
             particle[2] += dtheta
-            new_particles.append(particle)
+            new_particles[ind] = particle
 
         self.last_odom = noisy_odometry
         return new_particles

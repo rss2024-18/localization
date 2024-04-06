@@ -55,7 +55,7 @@ class ParticleFilter(Node):
             ## TODO downsample scan first 
             ## right now this works with no downsampling in the sim because the laser scans 
             ## have 100 beams anyways
-            #self.get_logger().info(str(len(scan)))
+
             weights = self.sensor_model.evaluate(self.particles, scan)
             self.resample_particles(weights)
 
@@ -70,7 +70,6 @@ class ParticleFilter(Node):
 
 
     def odom_callback(self, msg):
-        #self.get_logger().info("odom_callback")
         self.particle_lock.acquire()
         if not self.initialized:
             self.particle_lock.release()
@@ -93,7 +92,6 @@ class ParticleFilter(Node):
         self.particle_lock.release()
 
     def pose_callback(self, msg):
-        #self.get_logger().info("pose_callback")
         if not self.initialized:
             x = msg.point.x
             y = msg.point.y
@@ -102,7 +100,6 @@ class ParticleFilter(Node):
 
     def initialize_particles(self, x, y):
         ####Get From params instead !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-        self.get_logger().info("initialize_particles")
         num_particles = 100
         #x, y, theta = pose.position.x, pose.position.y, self.quaternion_to_yaw(pose.orientation)
         self.particles = np.array([[x, y, 0]] * num_particles)
@@ -110,10 +107,10 @@ class ParticleFilter(Node):
         for particle in range(len(self.particles)):
             part = np.random.rand(1,3) - 0.5 
             #print(part)
-            part[0][0] = x + part[0][0] * 0.1
-            part[0][1] = y + part[0][0] * 0.1
+            part[0][0] = x + part[0][0] * 1.0
+            part[0][1] = y + part[0][0] * 1.0
             part[0][2] *= 2*np.pi
-            #print(part)
+            self.get_logger().info(str(part))
             self.particles[particle] = part[0]
 
     def quaternion_to_yaw(self, quaternion):
