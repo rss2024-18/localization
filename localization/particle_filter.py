@@ -58,11 +58,10 @@ class ParticleFilter(Node):
     def resample_particles(self, weights):
         ## TODO debug np.random.choice since our p is not designed to sum to 1
         ## can normalize? added below for now
-        # weights *= 1/np.sum(weights)
-        # indices = np.random.choice(len(self.particles), len(self.particles), p=weights)
-        # self.particles = self.particles[indices]
+        #self.get_logger().info(str(weights))
+        weights *= 1/np.sum(weights)
         num_samples = len(self.particles)
-        selected_indices = np.random.choice(range(len(self.particles)), size=num_samples, p=weights, replace=True)
+        selected_indices = np.random.choice(range(len(self.particles)), size=num_samples, p=weights) #, replace=True
         self.particles = self.particles[selected_indices]
 
 
@@ -76,7 +75,6 @@ class ParticleFilter(Node):
             # self.initialized = True
         # Only use the twist component of the odometry message
         odometry = [msg.twist.twist.linear.x, msg.twist.twist.linear.y, msg.twist.twist.angular.z]
-        self.get_logger().info("odometry"+str(odometry))
         
         #get time
         header_timestamp = msg.header.stamp

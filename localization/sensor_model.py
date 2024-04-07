@@ -125,7 +125,8 @@ class SensorModel:
         """
 
         if not self.map_set:
-            return np.ones(len(particles)) / len(particles)  # Uniform distribution if map is not set
+            return None #doing this throws an actual error if something is wrong
+            #return np.ones(len(particles)) / len(particles)  # Uniform distribution if map is not set
 
         scans = self.scan_sim.scan(particles)
         num_particles = scans.shape[0]
