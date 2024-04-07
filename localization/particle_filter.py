@@ -22,7 +22,7 @@ class ParticleFilter(Node):
 
         self.declare_parameter('odom_topic', "/odom")
         self.declare_parameter('scan_topic', "/scan")
-        self.declare_parameter("num_particles", 1000) #check that this value is being imported correctly
+        self.declare_parameter("num_particles", "default") #check that this value is being imported correctly
 
         scan_topic = self.get_parameter("scan_topic").get_parameter_value().string_value
         odom_topic = self.get_parameter("odom_topic").get_parameter_value().string_value
@@ -45,10 +45,6 @@ class ParticleFilter(Node):
         self.initialized = False
 
         self.particle_lock = threading.Lock()
-
-    def motion_update(self, odometry):
-        if self.particles is not None:
-            self.particles = self.motion_model.evaluate(self.particles, odometry)
 
     def sensor_update(self, scan):
         if self.particles is not None:
@@ -101,24 +97,26 @@ class ParticleFilter(Node):
         self.particle_lock.release()
 
     def pose_callback(self, msg):
+        self.initialized = False
         if not self.initialized:
             x = msg.point.x
             y = msg.point.y
             self.initialize_particles(x, y)
             self.initialized = True
+        
 
     def initialize_particles(self, x, y):
         ####Get From params instead !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-        num_particles = self.get_parameter("num_particles").get_parameter_value().integer_value
+        num_particles = 1000 #self.get_parameter("num_particles").get_parameter_value().integer_value
         #x, y, theta = pose.position.x, pose.position.y, self.quaternion_to_yaw(pose.orientation)
         self.particles = np.array([[x, y, 0]] * num_particles)
         #todo!!!!! Figure out how to make this scaled wrt the map we are given !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
         for particle in range(num_particles):
             part = np.random.rand(3) - 0.5  # Generate random offsets between -0.5 and 0.5
-            
+    
             # Scale the offsets by 1 meter and add to the original (x, y) position
-            self.particles[particle, 0] = x + part[0] * 10.0
-            self.particles[particle, 1] = y + part[1] * 10.0
+            self.particles[particle, 0] = x + part[0] * 2.0
+            self.particles[particle, 1] = y + part[1] * 2.0
             
             # Generate random orientation in the range [0, 2*pi]
             self.particles[particle, 2] = np.random.uniform(0, 2*np.pi)
@@ -134,7 +132,7 @@ class ParticleFilter(Node):
         euler_angles = r.as_euler('xyz')
         return euler_angles[2]
 
-    def find_cluster(self):
+    def find_cluster(self): #this needs to be rewritten, we are no longer using this 
         db = DBSCAN(eps=0.5).fit(self.particles[:,:2])
         labels = db.labels_
         unique_labels = set(labels)
@@ -151,7 +149,7 @@ class ParticleFilter(Node):
         mean_angle = np.arctan2(mean_vector[1], mean_vector[0])
         return mean_angle
     
-    def find_average_pos(self):
+    def find_average_pos(self): #can literally get the average of all the particles instead
         largest_cluster = self.find_cluster()
         avgx = np.average(largest_cluster[0])
         avgy = np.average(largest_cluster[1])
@@ -196,7 +194,7 @@ class ParticleFilter(Node):
         transform.child_frame_id = self.particle_filter_frame
         transform.transform.translation.x = pose.position.x
         transform.transform.translation.y = pose.position.y
-        transform.transform.translation.z = 0.0
+        transform.transform.translation.z = 0.1
         transform.transform.rotation = pose.orientation
         self.tf_pub.publish(transform)
         #self.particles_pub.publish(self.particles) #fix this

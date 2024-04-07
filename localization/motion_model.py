@@ -59,15 +59,23 @@ class MotionModel:
 
         delta_time = current_time - self.last_time
         #delta_time =  duration.seconds() # + duration.nanoseconds()
+        
+        #car odometry 
+        theta_change = noisy_odometry[2]*delta_time
+        x_disp = noisy_odometry[0]*np.cos(theta_change)*delta_time
+        y_disp = noisy_odometry[0]*np.sin(theta_change)*delta_time
 
 
         ind = -1
         for particle in particles:
             ind = ind + 1
             theta = particle[2]
-            dx = noisy_odometry[0]* delta_time * np.cos(theta) - noisy_odometry[1] * delta_time * np.sin(theta)
-            dy = noisy_odometry[0]*delta_time * np.sin(theta) + noisy_odometry[1] * delta_time * np.cos(theta)
-            dtheta = noisy_odometry[2] * delta_time
+            dx = noisy_odometry[0]*np.cos(theta_change + theta)*delta_time
+            dy = noisy_odometry[0]*np.sin(theta_change + theta)*delta_time
+            dtheta = theta_change
+            # dx = noisy_odometry[0]* delta_time * np.cos(theta) - noisy_odometry[1] * delta_time * np.sin(theta)
+            # dy = noisy_odometry[0]*delta_time * np.sin(theta) + noisy_odometry[1] * delta_time * np.cos(theta)
+            # dtheta = noisy_odometry[2] * delta_time
 
             particle[0] += dx
             particle[1] += dy
