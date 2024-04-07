@@ -1,9 +1,12 @@
 import numpy as np
+from builtin_interfaces.msg import Duration
 
 class MotionModel:
 
     def __init__(self, node):
-        self.last_odom = [0.0, 0.0, 0.0]
+
+        self.initialized = False
+        self.last_time = None
         pass
         ####################################
         # TODO
@@ -22,7 +25,7 @@ class MotionModel:
     #     noisy_odometry[2] += np.random.normal(0, self.noise_rotational)  # Add rotational noise
     #     return noisy_odometry
 
-    def evaluate(self, particles, odometry):
+    def evaluate(self, particles, odometry, current_time):
         """
         Update the particles to reflect probable
         future states given the odometry data.
@@ -46,24 +49,32 @@ class MotionModel:
         # TODO
         # Apply motion model with noise
         noisy_odometry = [0.0, 0.0, 0.0]
-        noisy_odometry[0] = odometry.copy()[0] - self.last_odom[0]
-        noisy_odometry[1] = odometry.copy()[1] - self.last_odom[1]
-        noisy_odometry[2] = odometry.copy()[2] - self.last_odom[2]
+        noisy_odometry[0] = odometry.copy()[0]
+        noisy_odometry[1] = odometry.copy()[1]
+        noisy_odometry[2] = odometry.copy()[2]
         new_particles=particles.copy()
-        # Update particle positions based on noisy odometry
+        if not self.initialized:
+            self.last_time = current_time
+            self.initialized = True
+
+        delta_time = current_time - self.last_time
+        #delta_time =  duration.seconds() # + duration.nanoseconds()
+
+
         ind = -1
         for particle in particles:
             ind = ind + 1
             theta = particle[2]
-            dx = noisy_odometry[0] * np.cos(theta) - noisy_odometry[1] * np.sin(theta)
-            dy = noisy_odometry[0] * np.sin(theta) + noisy_odometry[1] * np.cos(theta)
-            dtheta = noisy_odometry[2]
+            dx = noisy_odometry[0]* delta_time * np.cos(theta) - noisy_odometry[1] * delta_time * np.sin(theta)
+            dy = noisy_odometry[0]*delta_time * np.sin(theta) + noisy_odometry[1] * delta_time * np.cos(theta)
+            dtheta = noisy_odometry[2] * delta_time
 
             particle[0] += dx
             particle[1] += dy
             particle[2] += dtheta
             new_particles[ind] = particle
+    
+        self.last_time = current_time
 
-        self.last_odom = noisy_odometry
         return new_particles
         ####################################

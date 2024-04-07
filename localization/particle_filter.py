@@ -22,9 +22,9 @@ class ParticleFilter(Node):
 
         self.declare_parameter('odom_topic', "/odom")
         self.declare_parameter('scan_topic', "/scan")
+        self.declare_parameter("num_particles", 1000) #check that this value is being imported correctly
 
-        #scan_topic = self.get_parameter("scan_topic").get_parameter_value().string_value
-        scan_topic = "/noscans"
+        scan_topic = self.get_parameter("scan_topic").get_parameter_value().string_value
         odom_topic = self.get_parameter("odom_topic").get_parameter_value().string_value
 
         self.laser_sub = self.create_subscription(LaserScan, scan_topic, self.laser_callback, 1)
@@ -65,8 +65,9 @@ class ParticleFilter(Node):
         # weights *= 1/np.sum(weights)
         # indices = np.random.choice(len(self.particles), len(self.particles), p=weights)
         # self.particles = self.particles[indices]
-        #self.particles = np.random.choice(self.particles, weights)
-        self.get_logger().info("RESAMPLING BUT NOT REALLY")
+        num_samples = len(self.particles)
+        selected_indices = np.random.choice(range(len(self.particles)), size=num_samples, p=weights, replace=True)
+        self.particles = self.particles[selected_indices]
 
 
     def odom_callback(self, msg):
@@ -79,7 +80,15 @@ class ParticleFilter(Node):
             # self.initialized = True
         # Only use the twist component of the odometry message
         odometry = [msg.twist.twist.linear.x, msg.twist.twist.linear.y, msg.twist.twist.angular.z]
-        updated_particles = self.motion_model.evaluate(self.particles, odometry)
+        self.get_logger().info("odometry"+str(odometry))
+        
+        #get time
+        header_timestamp = msg.header.stamp
+        timestamp_sec = header_timestamp.sec
+        timestamp_nanosec = header_timestamp.nanosec
+        timestamp_seconds = timestamp_sec + timestamp_nanosec / 1e9
+    
+        updated_particles = self.motion_model.evaluate(self.particles, odometry, timestamp_seconds)
         self.particles = updated_particles
         self.particle_lock.release()
         self.publish_pose()
@@ -100,7 +109,7 @@ class ParticleFilter(Node):
 
     def initialize_particles(self, x, y):
         ####Get From params instead !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-        num_particles = 100
+        num_particles = self.get_parameter("num_particles").get_parameter_value().integer_value
         #x, y, theta = pose.position.x, pose.position.y, self.quaternion_to_yaw(pose.orientation)
         self.particles = np.array([[x, y, 0]] * num_particles)
         #todo!!!!! Figure out how to make this scaled wrt the map we are given !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -113,9 +122,6 @@ class ParticleFilter(Node):
             
             # Generate random orientation in the range [0, 2*pi]
             self.particles[particle, 2] = np.random.uniform(0, 2*np.pi)
-
-            # Logging for debugging
-            self.get_logger().info(str(part))
 
     def quaternion_to_yaw(self, quaternion):
         x = quaternion.x
