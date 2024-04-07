@@ -104,14 +104,18 @@ class ParticleFilter(Node):
         #x, y, theta = pose.position.x, pose.position.y, self.quaternion_to_yaw(pose.orientation)
         self.particles = np.array([[x, y, 0]] * num_particles)
         #todo!!!!! Figure out how to make this scaled wrt the map we are given !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-        for particle in range(len(self.particles)):
-            part = np.random.rand(1,3) - 0.5 
-            #print(part)
-            part[0][0] = x + part[0][0] * 1.0
-            part[0][1] = y + part[0][0] * 1.0
-            part[0][2] *= 2*np.pi
+        for particle in range(num_particles):
+            part = np.random.rand(3) - 0.5  # Generate random offsets between -0.5 and 0.5
+            
+            # Scale the offsets by 1 meter and add to the original (x, y) position
+            self.particles[particle, 0] = x + part[0] * 10.0
+            self.particles[particle, 1] = y + part[1] * 10.0
+            
+            # Generate random orientation in the range [0, 2*pi]
+            self.particles[particle, 2] = np.random.uniform(0, 2*np.pi)
+
+            # Logging for debugging
             self.get_logger().info(str(part))
-            self.particles[particle] = part[0]
 
     def quaternion_to_yaw(self, quaternion):
         x = quaternion.x
