@@ -87,6 +87,7 @@ class SensorModel:
             No return type. Directly modify `self.sensor_model_table`.
         """
 
+        ## TODO rename or flip fo get rid of .T
         # d x z_k^(i) is probability of measuring z_k^(i) given d
         z_max = self.table_width - 1
         for d in range(self.table_width):
@@ -124,29 +125,23 @@ class SensorModel:
                 given the observation and the map.
         """
 
+        num_particles = particles.shape[0]
         if not self.map_set:
-            return None #doing this throws an actual error if something is wrong
-            #return np.ones(len(particles)) / len(particles)  # Uniform distribution if map is not set
+            return np.ones(num_particles) / num_particles # uniform distribution if map is not set
+        
+        scans = self.scan_sim.scan(particles) # N particles x M laser beams per particle
 
-        scans = self.scan_sim.scan(particles)
-        num_particles = scans.shape[0]
-        weights = np.zeros(num_particles)
-
+        probabilities = np.ones(num_particles)
         for i, particle_scan in enumerate(scans):
-            weight = 1.0
-            for observed_range, expected_range in zip(observation, particle_scan):
-                prob_table_row = self.sensor_model_table[int(observed_range)]
-                weight *= prob_table_row[int(expected_range)]
-            weights[i] = weight
-    
-        weights = np.power(weights, 1/3)
-        tot = np.sum(weights)
-        weights = weights/tot
+            # assume observation has already been downsampled => should be M long
+            for observed_range_m, expected_range_m in zip(observation, particle_scan):
+                observed_range_px = np.clip(int(observed_range_m / (self.resolution * self.lidar_scale_to_map_scale)), 0, self.table_width-1)
+                expected_range_px = np.clip(int(expected_range_m / (self.resolution * self.lidar_scale_to_map_scale)), 0, self.table_width-1)
+                probabilities[i] *= self.sensor_model_table[observed_range_px][expected_range_px]
+        
+        ## TODO consider raising to power less than 1 (e.g. 1/3) to reduce peaking
 
-        return weights
-
-
-        ####################################
+        return probabilities
 
     def map_callback(self, map_msg):
         # Convert the map to a numpy array

@@ -7,23 +7,23 @@ class MotionModel:
 
         self.initialized = False
         self.last_time = None
-        pass
+        # pass
         ####################################
         # TODO
         # Do any precomputation for the motion
         # model here.
-        # self.noise_translational = 0.07  # Standard deviation for translational noise
-        # self.noise_rotational = 0.74  # Standard deviation for rotational noise
+        self.noise_translational = 0.07  # Standard deviation for translational noise
+        self.noise_rotational = 0.74  # Standard deviation for rotational noise
         ####################################
     
 
-    # def add_odometry_noise(self, odometry):
-    #     # Add noise to odometry data
-    #     noisy_odometry = odometry.copy()
-    #     noisy_odometry[0] += np.random.normal(0, self.noise_translational)  # Add translational noise
-    #     noisy_odometry[1] += np.random.normal(0, self.noise_translational)
-    #     noisy_odometry[2] += np.random.normal(0, self.noise_rotational)  # Add rotational noise
-    #     return noisy_odometry
+    def add_odometry_noise(self, odometry):
+        # Add noise to odometry data
+        noisy_odometry = odometry.copy()
+        noisy_odometry[0] += np.random.normal(0, self.noise_translational)  # Add translational noise
+        noisy_odometry[1] += np.random.normal(0, self.noise_translational)
+        noisy_odometry[2] += np.random.normal(0, self.noise_rotational)  # Add rotational noise
+        return noisy_odometry
 
     def evaluate(self, particles, odometry, current_time):
         """
@@ -70,9 +70,10 @@ class MotionModel:
         for particle in particles:
             ind = ind + 1
             theta = particle[2]
-            dx = noisy_odometry[0]*np.cos(theta_change + theta)*delta_time
-            dy = noisy_odometry[0]*np.sin(theta_change + theta)*delta_time
-            dtheta = theta_change
+            temp_odometry = self.add_odometry_noise(noisy_odometry)
+            dx = temp_odometry[0]*np.cos(theta_change + theta)*delta_time
+            dy = temp_odometry[0]*np.sin(theta_change + theta)*delta_time
+            dtheta = temp_odometry[2] * delta_time
             # dx = noisy_odometry[0]* delta_time * np.cos(theta) - noisy_odometry[1] * delta_time * np.sin(theta)
             # dy = noisy_odometry[0]*delta_time * np.sin(theta) + noisy_odometry[1] * delta_time * np.cos(theta)
             # dtheta = noisy_odometry[2] * delta_time
