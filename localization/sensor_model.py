@@ -16,7 +16,7 @@ class SensorModel:
 
     def __init__(self, node):
         node.declare_parameter('map_topic', "default")
-        node.declare_parameter('num_beams_per_particle', "default")
+        # node.declare_parameter('num_beams_per_particle', "default")
         node.declare_parameter('scan_theta_discretization', "default")
         node.declare_parameter('scan_field_of_view', "default")
         node.declare_parameter('lidar_scale_to_map_scale', 1)
@@ -131,17 +131,29 @@ class SensorModel:
         
         scans = self.scan_sim.scan(particles) # N particles x M laser beams per particle
 
-        probabilities = np.ones(num_particles)
-        for i, particle_scan in enumerate(scans):
-            # assume observation has already been downsampled => should be M long
-            for observed_range_m, expected_range_m in zip(observation, particle_scan):
-                observed_range_px = np.clip(int(observed_range_m / (self.resolution * self.lidar_scale_to_map_scale)), 0, self.table_width-1)
-                expected_range_px = np.clip(int(expected_range_m / (self.resolution * self.lidar_scale_to_map_scale)), 0, self.table_width-1)
-                probabilities[i] *= self.sensor_model_table[observed_range_px][expected_range_px]
-        
-        ## TODO consider raising to power less than 1 (e.g. 1/3) to reduce peaking
+        observed_range_px = np.clip(observation / (self.resolution * self.lidar_scale_to_map_scale), 0, self.table_width-1).astype(int) # M
+        expected_range_px = np.clip(scans / (self.resolution * self.lidar_scale_to_map_scale), 0, self.table_width-1).astype(int) # N x M
+
+        probabilities = np.empty(num_particles)
+        for i, particle_scan in enumerate(expected_range_px):
+            p = np.prod(self.sensor_model_table[observed_range_px, particle_scan])
+            probabilities[i] = p
+
+        probabilities = np.power(probabilities, 1/3)
 
         return probabilities
+
+        # probabilities = np.ones(num_particles)
+        # for i, particle_scan in enumerate(scans):
+        #     # assume observation has already been downsampled => should be M long
+        #     for observed_range_m, expected_range_m in zip(observation, particle_scan):
+        #         observed_range_px = np.clip(int(observed_range_m / (self.resolution * self.lidar_scale_to_map_scale)), 0, self.table_width-1)
+        #         expected_range_px = np.clip(int(expected_range_m / (self.resolution * self.lidar_scale_to_map_scale)), 0, self.table_width-1)
+        #         probabilities[i] *= self.sensor_model_table[observed_range_px][expected_range_px]
+        
+        # ## TODO consider raising to power less than 1 (e.g. 1/3) to reduce peaking
+
+        # return probabilities
 
     def map_callback(self, map_msg):
         # Convert the map to a numpy array

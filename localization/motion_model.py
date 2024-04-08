@@ -4,7 +4,7 @@ from builtin_interfaces.msg import Duration
 class MotionModel:
 
     def __init__(self, node):
-
+        self.node = node
         self.initialized = False
         self.last_time = None
         # pass
@@ -12,8 +12,8 @@ class MotionModel:
         # TODO
         # Do any precomputation for the motion
         # model here.
-        self.noise_translational = 0.07  # Standard deviation for translational noise
-        self.noise_rotational = 0.74  # Standard deviation for rotational noise
+        self.noise_translational = 0.05  # 0.07 # Standard deviation for translational noise 
+        self.noise_rotational = 0.1 # 0.74  # Standard deviation for rotational noise
         ####################################
     
 
@@ -70,17 +70,20 @@ class MotionModel:
         for particle in particles:
             ind = ind + 1
             theta = particle[2]
-            temp_odometry = self.add_odometry_noise(noisy_odometry)
+
+            temp_odometry = noisy_odometry
             dx = temp_odometry[0]*np.cos(theta_change + theta)*delta_time
             dy = temp_odometry[0]*np.sin(theta_change + theta)*delta_time
             dtheta = temp_odometry[2] * delta_time
+            temp_odometry = self.add_odometry_noise([dx, dy, dtheta])
+
             # dx = noisy_odometry[0]* delta_time * np.cos(theta) - noisy_odometry[1] * delta_time * np.sin(theta)
             # dy = noisy_odometry[0]*delta_time * np.sin(theta) + noisy_odometry[1] * delta_time * np.cos(theta)
             # dtheta = noisy_odometry[2] * delta_time
 
-            particle[0] += dx
-            particle[1] += dy
-            particle[2] += dtheta
+            particle[0] += temp_odometry[0]
+            particle[1] += temp_odometry[1]
+            particle[2] += temp_odometry[2]
             new_particles[ind] = particle
     
         self.last_time = current_time

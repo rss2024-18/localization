@@ -8,6 +8,7 @@ from sensor_msgs.msg import LaserScan
 from rclpy.node import Node
 import rclpy
 
+import tf2_ros
 import numpy as np
 from sklearn.cluster import DBSCAN
 from scipy.spatial.transform import Rotation
@@ -34,6 +35,7 @@ class ParticleFilter(Node):
         self.declare_parameter('odom_topic', "/odom")
         self.declare_parameter('scan_topic', "/scan")
         self.declare_parameter('num_particles', "default")
+        self.declare_parameter('num_beams_per_particle', "default")
 
         scan_topic = self.get_parameter("scan_topic").get_parameter_value().string_value
         odom_topic = self.get_parameter("odom_topic").get_parameter_value().string_value
@@ -64,7 +66,8 @@ class ParticleFilter(Node):
         #     "/map" frame.
 
         self.odom_pub = self.create_publisher(Odometry, "/pf/pose/odom", 1)
-        self.tf_pub = self.create_publisher(TransformStamped, self.particle_filter_frame, 1)
+        self.tfBuffer = tf2_ros.Buffer()
+        self.tfBroadcaster = tf2_ros.TransformBroadcaster(self)
         self.particles_pub = self.create_publisher(PoseArray, "/pf/pose/particles", 1)
 
         # Initialize the models
@@ -84,15 +87,16 @@ class ParticleFilter(Node):
         # and the particle_filter_frame.
 
         self.num_particles = self.get_parameter("num_particles").get_parameter_value().integer_value
+        self.num_beams_per_particle = self.get_parameter("num_beams_per_particle").get_parameter_value().integer_value
         self.particles = None
         self.particle_lock = threading.Lock()
 
     def pose_callback(self, pose_estimate):
         # respond to an initial pose estimate and initialize points
 
-        # self.particle_lock.acquire()
+        self.particle_lock.acquire()
         self.particles = np.empty((self.num_particles, 3))
-        # self.particle_lock.release()
+        self.particle_lock.release()
         mean = np.array([pose_estimate.pose.pose.position.x, pose_estimate.pose.pose.position.y, pose_estimate.pose.pose.position.z])
         use_covariance = False
         if use_covariance:
@@ -102,11 +106,11 @@ class ParticleFilter(Node):
             x = np.random.normal(mean[0], sigma, self.num_particles)
             y = np.random.normal(mean[1], sigma, self.num_particles)
 
-        # self.particle_lock.acquire()
+        self.particle_lock.acquire()
         self.particles[:,0] = x
         self.particles[:,1] = y
         self.particles[:,2] = np.random.uniform(0, 2*np.pi, size=self.num_particles)
-        # self.particle_lock.release()
+        self.particle_lock.release()
 
         self.publish_particles()
         self.publish_pose()
@@ -116,16 +120,18 @@ class ParticleFilter(Node):
             return
         
         distances = np.array(laser_scan.ranges)
-        ## TODO downsample scan first 
-        ## right now this works with no downsampling in the sim because the laser scans have 100 beams anyways
+
+        # downsample
+        downsampled_indices = np.round(np.linspace(0, self.num_beams_per_particle-1, self.num_beams_per_particle)).astype(int)
+        downsampled = distances[downsampled_indices]
 
         # get probabilities from sensor model and resample particles
-        probabilities = self.sensor_model.evaluate(self.particles, distances)
+        probabilities = self.sensor_model.evaluate(self.particles, downsampled)
         probabilities *= 1 / np.sum(probabilities) # normalize for np.random.choice
         resampled_indices = np.random.choice(self.num_particles, size=self.num_particles, p=probabilities)
-        # self.particle_lock.acquire()
+        self.particle_lock.acquire()
         self.particles = self.particles[resampled_indices]
-        # self.particle_lock.release()
+        self.particle_lock.release()
 
         self.publish_pose()      
         self.publish_particles()
@@ -146,15 +152,14 @@ class ParticleFilter(Node):
         # update particles from odometry
         updated_particles = self.motion_model.evaluate(self.particles, pose, timestamp_seconds)
 
-        # self.particle_lock.acquire()
+        self.particle_lock.acquire()
         self.particles = updated_particles
-        # self.particle_lock.release()
+        self.particle_lock.release()
 
         self.publish_pose()  
         self.publish_particles()
 
     def publish_pose(self):
-        return
         if self.particles is None:
             return
         
@@ -173,7 +178,7 @@ class ParticleFilter(Node):
         odom.pose.pose = pose
         self.odom_pub.publish(odom)
 
-        # publish as transform
+        # send as transform
         tf = TransformStamped()
         tf.header.stamp = self.get_clock().now().to_msg()
         tf.header.frame_id = "/map"
@@ -181,14 +186,17 @@ class ParticleFilter(Node):
         tf.transform.translation.x = pose.position.x
         tf.transform.translation.y = pose.position.y
         tf.transform.rotation = pose.orientation
-        self.tf_pub.publish(tf)
+
+        self.tfBroadcaster.sendTransform(tf)
 
     def find_average_pos(self): #can literally get the average of all the particles instead
-        largest_cluster = self.find_cluster()
-        avgx = np.average(largest_cluster[0])
-        avgy = np.average(largest_cluster[1])
-        thetas = largest_cluster[2]
-        avgtheta = self.mean_angle(thetas)
+        # largest_cluster = self.find_cluster()
+        # avgx = np.average(largest_cluster[0])
+        # avgy = np.average(largest_cluster[1])
+        # thetas = largest_cluster[2]
+        avgx = np.mean(self.particles[:,0])
+        avgy = np.mean(self.particles[:,1])
+        avgtheta = self.mean_angle(self.particles[:,2])
         return (avgx, avgy, avgtheta)
 
     def find_cluster(self):  
