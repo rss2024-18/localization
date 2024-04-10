@@ -12,6 +12,7 @@ import tf2_ros
 import numpy as np
 from scipy.spatial.transform import Rotation
 import threading
+import csv
 
 assert rclpy
 
@@ -198,7 +199,9 @@ class ParticleFilter(Node):
         tf.transform.translation.x = pose.position.x
         tf.transform.translation.y = pose.position.y
         tf.transform.rotation = pose.orientation
-
+        poselist = list(avg_pose)
+        file_path = ???
+        self.odom_csv_writer(odom, poselist, file_path)
         self.tfBroadcaster.sendTransform(tf)
 
     def find_average_pos(self): #can literally get the average of all the particles instead
@@ -248,8 +251,83 @@ class ParticleFilter(Node):
             pose.orientation.z = quat[2]
             pose.orientation.w = quat[3]
             pose_array.poses.append(pose)
+        file_path = ???
+        self.pose_csv_writer(pose_array, file_path)
 
         self.particles_pub.publish(pose_array)
+    
+    def pose_csv_writer(pose_array_msg, file_path):
+        """
+        Writes the data from a ROS 2 PoseArray message along with its timestamp to a CSV file.
+
+        Args:
+            pose_array_msg (geometry_msgs.msg.PoseArray): ROS 2 PoseArray message.
+            file_path (str): Path to the CSV file.
+        """
+        poses = []
+        timestamp = pose_array_msg.header.stamp.sec + pose_array_msg.header.stamp.nanosec * 1e-9
+
+        for pose in pose_array_msg.poses:
+            # Extracting position and orientation data from each pose
+            position = pose.position
+            orientation = pose.orientation
+
+            # Extracting x, y, z coordinates
+            x = position.x
+            y = position.y
+            z = position.z
+
+            # Extracting orientation (quaternion) components
+            qx = orientation.x
+            qy = orientation.y
+            qz = orientation.z
+            qw = orientation.w
+
+            # Appending pose data to the list
+            poses.append([timestamp, x, y, z, qx, qy, qz, qw])
+
+        # Writing the pose data to the CSV file
+        with open(file_path, 'a', newline='') as csvfile:
+            writer = csv.writer(csvfile)
+            writer.writerows(poses)
+
+    def odom_csv_writer(self, odometry_msg, pose_list, file_path):
+        """
+        Writes the data from a ROS 2 Odometry message and a pose list to a CSV file.
+
+        Args:
+            odometry_msg (nav_msgs.msg.Odometry): ROS 2 Odometry message.
+            pose_list (list): List containing [x, y, theta].
+            file_path (str): Path to the CSV file.
+        """
+        # Extracting data from the Odometry message
+        position = odometry_msg.pose.pose.position
+        orientation = odometry_msg.pose.pose.orientation
+
+        # Extracting x, y, z coordinates from the Odometry message
+        x_odom = position.x
+        y_odom = position.y
+
+        # Convert quaternion to Euler angles
+        r = Rotation.from_quat([orientation.x, orientation.y, orientation.z, orientation.w])
+        euler = r.as_euler('xyz', degrees=False)
+        theta_odom = euler[2]  # Yaw angle (z-axis rotation)
+
+        # Extracting timestamp from the Odometry message
+        timestamp = odometry_msg.header.stamp.sec + odometry_msg.header.stamp.nanosec * 1e-9
+
+        # Appending Odometry data to the list
+        odometry_data = [timestamp, x_odom, y_odom, theta_odom]
+
+        # Appending pose list to the Odometry data
+        odometry_data.extend(pose_list)
+
+        # Writing the data to the CSV file
+        with open(file_path, 'a', newline='') as csvfile:
+            writer = csv.writer(csvfile)
+            writer.writerow(odometry_data)
+
+
 
 
 def main(args=None):
