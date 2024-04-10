@@ -113,12 +113,13 @@ class ParticleFilter(Node):
         self.particles[:,2] = np.random.uniform(0, 2*np.pi, size=self.num_particles)
         self.particle_lock.release()
 
-        self.get_logger().info(str(self.particles))
+        # self.get_logger().info(str(self.particles))
 
         self.publish_particles()
         self.publish_pose()
 
     def laser_callback(self, laser_scan): 
+        laser_scan.header.frame_id = 'base_link'
         self.laser_pub.publish(laser_scan)
 
         if self.particles is None:
@@ -172,6 +173,9 @@ class ParticleFilter(Node):
         self.publish_pose()  
         self.publish_particles()
 
+        file_path = 'src/localization/test_data/odom.csv'
+        self.odom_csv_writer(odometry, [0, 0, 0], file_path)
+
     def publish_pose(self):
         if self.particles is None:
             return
@@ -200,7 +204,7 @@ class ParticleFilter(Node):
         tf.transform.translation.y = pose.position.y
         tf.transform.rotation = pose.orientation
         poselist = list(avg_pose)
-        file_path = ???
+        file_path = 'src/localization/test_data/avg.csv'
         self.odom_csv_writer(odom, poselist, file_path)
         self.tfBroadcaster.sendTransform(tf)
 
@@ -251,12 +255,12 @@ class ParticleFilter(Node):
             pose.orientation.z = quat[2]
             pose.orientation.w = quat[3]
             pose_array.poses.append(pose)
-        file_path = ???
-        self.pose_csv_writer(pose_array, file_path)
+        # file_path = 'src/localization/test_data/pose.csv'
+        # self.pose_csv_writer(pose_array, file_path)
 
         self.particles_pub.publish(pose_array)
     
-    def pose_csv_writer(pose_array_msg, file_path):
+    def pose_csv_writer(self, pose_array_msg, file_path):
         """
         Writes the data from a ROS 2 PoseArray message along with its timestamp to a CSV file.
 
