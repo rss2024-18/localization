@@ -15,6 +15,7 @@ np.set_printoptions(threshold=sys.maxsize)
 class SensorModel:
 
     def __init__(self, node):
+        self.node = node
         node.declare_parameter('map_topic', "default")
         # node.declare_parameter('num_beams_per_particle', "default")
         node.declare_parameter('scan_theta_discretization', "default")
@@ -66,6 +67,8 @@ class SensorModel:
             self.map_topic,
             self.map_callback,
             1)
+
+        self.first = True
 
     def precompute_sensor_model(self):
         """
@@ -127,12 +130,15 @@ class SensorModel:
 
         num_particles = particles.shape[0]
         if not self.map_set:
-            return np.ones(num_particles) / num_particles # uniform distribution if map is not set
-        
+            return None # np.ones(num_particles) / num_particles # uniform distribution if map is not set
+                
         scans = self.scan_sim.scan(particles) # N particles x M laser beams per particle
 
         observed_range_px = np.clip(observation / (self.resolution * self.lidar_scale_to_map_scale), 0, self.table_width-1).astype(int) # M
         expected_range_px = np.clip(scans / (self.resolution * self.lidar_scale_to_map_scale), 0, self.table_width-1).astype(int) # N x M
+
+        # self.node.get_logger().info(str(expected_range_px))
+        # self.node.get_logger().info(str(self.resolution))
 
         probabilities = np.empty(num_particles)
         for i, particle_scan in enumerate(expected_range_px):
@@ -140,6 +146,10 @@ class SensorModel:
             probabilities[i] = p
 
         probabilities = np.power(probabilities, 1/3)
+
+        if self.first:
+            self.node.get_logger().info(str(probabilities))
+            self.first = False
 
         return probabilities
 
@@ -183,5 +193,6 @@ class SensorModel:
 
         # Make the map set
         self.map_set = True
+        self.node.get_logger().info('map initialized')
 
         print("Map initialized")

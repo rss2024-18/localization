@@ -12,8 +12,8 @@ class MotionModel:
         # TODO
         # Do any precomputation for the motion
         # model here.
-        self.noise_translational = 0.05  # 0.07 # Standard deviation for translational noise 
-        self.noise_rotational = 0.1 # 0.74  # Standard deviation for rotational noise
+        self.noise_translational = 0.05 # 0.007  # 0.07 # Standard deviation for translational noise 
+        self.noise_rotational = 0.05 # 0.01 # 0.74  # Standard deviation for rotational noise
         ####################################
     
 
@@ -59,11 +59,6 @@ class MotionModel:
 
         delta_time = current_time - self.last_time
         #delta_time =  duration.seconds() # + duration.nanoseconds()
-        
-        #car odometry 
-        theta_change = noisy_odometry[2]*delta_time
-        x_disp = noisy_odometry[0]*np.cos(theta_change)*delta_time
-        y_disp = noisy_odometry[0]*np.sin(theta_change)*delta_time
 
 
         ind = -1
@@ -71,10 +66,11 @@ class MotionModel:
             ind = ind + 1
             theta = particle[2]
 
-            temp_odometry = noisy_odometry
-            dx = temp_odometry[0]*np.cos(theta_change + theta)*delta_time
-            dy = temp_odometry[0]*np.sin(theta_change + theta)*delta_time
-            dtheta = temp_odometry[2] * delta_time
+            dtheta = noisy_odometry[2] * delta_time
+            dx = noisy_odometry[0]*np.cos(dtheta + theta)*delta_time # - temp_odometry[1]*np.sin(theta_change + theta)*delta_time
+            dy = noisy_odometry[0]*np.sin(dtheta + theta)*delta_time # + temp_odometry[1]*np.cos(theta_change + theta)*delta_time
+            
+            # temp_odometry = [dx, dy, dtheta]
             temp_odometry = self.add_odometry_noise([dx, dy, dtheta])
 
             # dx = noisy_odometry[0]* delta_time * np.cos(theta) - noisy_odometry[1] * delta_time * np.sin(theta)

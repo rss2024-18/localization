@@ -10,7 +10,6 @@ import rclpy
 
 import tf2_ros
 import numpy as np
-from sklearn.cluster import DBSCAN
 from scipy.spatial.transform import Rotation
 import threading
 
@@ -32,7 +31,7 @@ class ParticleFilter(Node):
         #     twist component, so you should rely only on that
         #     information, and *not* use the pose component.
         
-        self.declare_parameter('odom_topic', "/odom")
+        self.declare_parameter('odom_topic', "/vesc/odom")
         self.declare_parameter('scan_topic', "/scan")
         self.declare_parameter('num_particles', "default")
         self.declare_parameter('num_beams_per_particle', "default")
@@ -69,6 +68,7 @@ class ParticleFilter(Node):
         self.tfBuffer = tf2_ros.Buffer()
         self.tfBroadcaster = tf2_ros.TransformBroadcaster(self)
         self.particles_pub = self.create_publisher(PoseArray, "/pf/pose/particles", 1)
+        self.laser_pub = self.create_publisher(LaserScan, "/viz/scan", 1)
 
         # Initialize the models
         self.motion_model = MotionModel(self)
@@ -102,7 +102,7 @@ class ParticleFilter(Node):
         if use_covariance:
             x, y, z = np.random.multivariate_normal(mean, np.array(pose_estimate.covariance), self.num_particles)
         else:
-            sigma = 0.1
+            sigma = 1.0
             x = np.random.normal(mean[0], sigma, self.num_particles)
             y = np.random.normal(mean[1], sigma, self.num_particles)
 
@@ -112,21 +112,29 @@ class ParticleFilter(Node):
         self.particles[:,2] = np.random.uniform(0, 2*np.pi, size=self.num_particles)
         self.particle_lock.release()
 
+        self.get_logger().info(str(self.particles))
+
         self.publish_particles()
         self.publish_pose()
 
     def laser_callback(self, laser_scan): 
+        self.laser_pub.publish(laser_scan)
+
         if self.particles is None:
             return
         
         distances = np.array(laser_scan.ranges)
 
         # downsample
-        downsampled_indices = np.round(np.linspace(0, self.num_beams_per_particle-1, self.num_beams_per_particle)).astype(int)
+        downsampled_indices = np.round(np.linspace(0, len(distances)-1, self.num_beams_per_particle)).astype(int)
         downsampled = distances[downsampled_indices]
 
         # get probabilities from sensor model and resample particles
         probabilities = self.sensor_model.evaluate(self.particles, downsampled)
+
+        # self.get_logger().info(str(probabilities))
+        # self.get_logger().info(str(np.max(probabilities)))
+
         probabilities *= 1 / np.sum(probabilities) # normalize for np.random.choice
         resampled_indices = np.random.choice(self.num_particles, size=self.num_particles, p=probabilities)
         self.particle_lock.acquire()
@@ -141,8 +149,12 @@ class ParticleFilter(Node):
             return
 
         # only use the twist component of the odometry message
-        pose = [odometry.twist.twist.linear.x, odometry.twist.twist.linear.y, odometry.twist.twist.angular.z]
-        
+        in_sim = False
+        if in_sim:
+            pose = [odometry.twist.twist.linear.x, odometry.twist.twist.linear.y, odometry.twist.twist.angular.z]
+        else:
+            pose = [-odometry.twist.twist.linear.x, -odometry.twist.twist.linear.y, -odometry.twist.twist.angular.z]
+
         # get time
         header_timestamp = odometry.header.stamp
         timestamp_sec = header_timestamp.sec
